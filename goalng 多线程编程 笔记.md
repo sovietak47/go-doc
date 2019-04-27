@@ -44,86 +44,94 @@
 #### 2.1.1golang中通过锁机制实现变量的线程安全
 
 在golang中，可以通过 "sync" 包 中提供的 Mutex、RWMutex 实现锁机制。
-> type Mutex
-> func (m *Mutex) Lock()
-> func (m *Mutex) Unlock()
-> type RWMutex
-> func (rw *RWMutex) Lock()
-> func (rw *RWMutex) Unlock()
-> func (rw *RWMutex) RLock()
-> func (rw *RWMutex) RUnlock()
-> func (rw *RWMutex) RLocker() Locker
+
+```golang
+type Mutex
+func (m *Mutex) Lock(){}
+func (m *Mutex) Unlock(){}
+type RWMutex
+func (rw *RWMutex) Lock(){}
+func (rw *RWMutex) Unlock(){}
+func (rw *RWMutex) RLock(){}
+func (rw *RWMutex) RUnlock(){}
+func (rw *RWMutex) RLocker() Locker{}
+```
 Mutex 为互斥锁（悲观锁），可以确保的某段时间内，对象不能有多个线程同时访问；
+
 RWMutex为读写互斥锁（乐观锁），可以允许对象被多个线程读数据，但只能有且只有1个线程写数据。
 
+下面举例说明锁的用法：
 
-> type Account struct {
-> 	sync.RWMutex
-> 	system map[string]int
-> }
-> 
-> func NewAccount() *Account {
-> 	b := &Account{
-> 		system: make(map[string]int),
-> 	}
-> 	return b
-> }
-> 
-> func (a *Account) AddUser(userName string) {
-> 	a.Lock()
-> 	defer a.Unlock()
-> 	if a.isUserExist(userName) {
-> 		log.Printf("can't AddUser:user %v exist", userName)
-> 	}
-> 	a.system[userName] = 0
-> }
-> 
-> func (a *Account) isUserExist(userName string) bool {
-> 	_, isExist := a.system[userName]
-> 	return isExist
-> }
-> 
-> func (a *Account) Query(userName string) {
-> 	a.RLock()
-> 	defer a.RUnlock()
-> 	if !a.isUserExist(userName) {
-> 		log.Printf("can't Save: user %v not exist", userName)
-> 		return
-> 	}
-> 
-> 	amount := a.system[userName]
-> 	log.Printf("Query success: user %v has %d", userName, amount)
-> }
-> 
-> func (a *Account) Save(userName string, saving int) {
-> 	a.RLock()
-> 	defer a.RUnlock()
-> 	if !a.isUserExist(userName) {
-> 		log.Printf("can't Save: user %v not exist", userName)
-> 		return
-> 	}
-> 
-> 	amount := a.system[userName]
-> 	amount += saving
-> 	log.Printf("Save success: user %v has %d", userName, amount)
-> }
-> 
-> func (a *Account) Out(userName string, saving int) {
-> 	a.RLock()
-> 	defer a.RUnlock()
-> 	if !a.isUserExist(userName) {
-> 		log.Printf("can't Out: user %v not exist", userName)
-> 		return
-> 	}
-> 
-> 	amount := a.system[userName]
-> 	if amount < 0 {
-> 		log.Printf("can't Out: user %v not exist", userName)
-> 		return
-> 	}
-> 	amount -= saving
-> 	log.Printf("Out success: user %v has %d", userName, amount)
-> }
+```golang
+type Account struct {
+	sync.RWMutex
+	system map[string]int
+}
+
+func NewAccount() *Account {
+	b := &Account{
+		system: make(map[string]int),
+	}
+	return b
+}
+
+func (a *Account) AddUser(userName string) {
+	a.Lock()
+	defer a.Unlock()
+	if a.isUserExist(userName) {
+		log.Printf("can't AddUser:user %v exist", userName)
+	}
+	a.system[userName] = 0
+}
+
+func (a *Account) isUserExist(userName string) bool {
+	_, isExist := a.system[userName]
+	return isExist
+}
+
+func (a *Account) Query(userName string) {
+	a.RLock()
+	defer a.RUnlock()
+	if !a.isUserExist(userName) {
+		log.Printf("can't Save: user %v not exist", userName)
+		return
+	}
+
+	amount := a.system[userName]
+	log.Printf("Query success: user %v has %d", userName, amount)
+}
+
+func (a *Account) Save(userName string, saving int) {
+	a.RLock()
+	defer a.RUnlock()
+	if !a.isUserExist(userName) {
+		log.Printf("can't Save: user %v not exist", userName)
+		return
+	}
+
+	amount := a.system[userName]
+	amount += saving
+	log.Printf("Save success: user %v has %d", userName, amount)
+}
+
+func (a *Account) Out(userName string, saving int) {
+	a.RLock()
+	defer a.RUnlock()
+	if !a.isUserExist(userName) {
+		log.Printf("can't Out: user %v not exist", userName)
+		return
+	}
+
+	amount := a.system[userName]
+	if amount < 0 {
+		log.Printf("can't Out: user %v not exist", userName)
+		return
+	}
+	amount -= saving
+	log.Printf("Out success: user %v has %d", userName, amount)
+}
+
+```
 
 
 
