@@ -58,9 +58,10 @@ func (rw *RWMutex) RLocker() Locker{}
 ```
 Mutex 为互斥锁（悲观锁），可以确保的某段时间内，对象不能有多个线程同时访问；
 
-RWMutex为读写互斥锁（乐观锁），可以允许对象被多个线程读数据，但只能有且只有1个线程写数据。
+RWMutex 为读写互斥锁（乐观锁），可以允许对象被多个线程读数据，但只能有且只有1个线程写数据。当然，它也提供互斥锁的功能。
 
 下面举例说明锁的用法：
+我们模拟一个账户系统。可以为系统添加用户，存钱，取钱，查询余额。
 
 ```golang
 type Account struct {
@@ -133,13 +134,41 @@ func (a *Account) Out(userName string, saving int) {
 
 ```
 
+首先，我们演示一下互斥锁：上锁后，会将其他线程阻塞。无论其他线程想做什么操作。
+我们模拟一个账号系统挂掉的场景。当系统“挂掉”时，我们启动互斥锁，在互斥锁解锁之前，其他线程对账号系统的访问都会阻塞，直至互斥锁解锁。
 
 
+```golang
+func SystemOffline() {
+	a := NewAccount()
+	a.AddUser("existOne")
 
+	go func(a *Account) {
+		a.Lock()
+		defer a.Unlock()
+		// systemOffline
+		log.Printf("system offline")
+		time.Sleep(5 * time.Second)
 
+		// systemOnline
+		log.Printf("system back online")
+	}(a)
 
+	go func() {
+		time.Sleep(1 * time.Second)
+		a.Query("existOne")
+	}()
+}
 
+func main() {
+	SystemOffline()
+	time.Sleep(10 * time.Second)
+}
 
+```
+
+运行结果：
+![Image text](https://raw.githubusercontent.com/hongmaju/light7Local/master/img/productShow/20170518152848.png)
 
 
 
