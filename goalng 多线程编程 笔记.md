@@ -37,7 +37,7 @@
 当一个变量代表一个被多个线程共享的资源————比如，该变量表征会被多个线程访问的一个公共对象，一个文件，一个可被多个线程可见的状态表征量，甚至是多线程间数据交换的通道————的时候，则该变量存在被多个线程并发访问的风险或者需求，该变量必须做到线程安全。
 
 
-这类变量的作用域一般大于访问它的多个线程。即，相对域多个线程而言，该变量是以“全局变量”的方式出现。在访问该类变量时应当注意，应以访问“无状态资源”的方式访问该类变量：该类变量一般是不会，也不应“记忆”某一线程的"上一次操作"；上一秒访问得到的结果，并不意味着下一秒它还是这个结果。如确实需要记录与访问该变量相关的状态，该工作应由访问线程自行完成。
+这类变量的作用域一般大于访问它的多个线程。即，相对于多个线程而言，该变量是以“全局变量”的方式出现。在访问该类变量时应当注意，应以访问“无状态资源”的方式访问该类变量：该类变量一般是不会，也不应“记忆”某一线程的"上一次操作"；上一秒访问得到的结果，并不意味着下一秒它还是这个结果。如确实需要记录与访问该变量相关的状态，该工作应由访问线程自行完成。
 
 可以通过锁机制，简单的实现线程安全。
 
@@ -56,107 +56,65 @@ func (rw *RWMutex) RLock(){}
 func (rw *RWMutex) RUnlock(){}
 func (rw *RWMutex) RLocker() Locker{}
 ```
-Mutex 为互斥锁（悲观锁），可以确保的某段时间内，对象不能有多个线程同时访问；
+Mutex 为互斥锁。func (m *Mutex) Lock()方法锁住m，如果m已经加锁，则阻塞直到m解锁；func (m *Mutex) Unlock()方法解锁m，如果m未加锁会导致运行时错误。锁和线程无关，可以由不同的线程加锁和解锁。从而确保某段时间内，含有Mutex的对象只能被一个线程同时访问；
 
-RWMutex 为读写互斥锁（乐观锁），可以允许对象被多个线程读数据，但只能有且只有1个线程写数据。当然，它也提供互斥锁的功能。
+RWMutex 为读写互斥锁。func (rw *RWMutex) Lock()方法和func (m *Mutex) Unlock()方法与Mutex的类似，因此可以用于写入场景，rw锁定为写入状态，禁止其他线程读取或者写入。func (rw *RWMutex) RLock()方法将rw锁定为读取状态，禁止其他线程写入，但不禁止读取。func (rw *RWMutex) RUnlock()方法解除rw的读取锁状态，如果rw未加读取锁会导致运行时错误。RWMutex类型的锁也和线程无关，可以由不同的线程加读取锁/写入和解读取锁/写入锁。从而确保含有RWMutex的对象可以被多个线程读数据，但只能有且只有1个线程写数据。
+
 
 下面举例说明锁的用法：
-我们模拟一个账户系统。可以为系统添加用户，存钱，取钱，查询余额。
 
 ```golang
-type Account struct {
-	sync.RWMutex
-	system map[string]int
+type System struct {
+	sync.Mutex
+	info map[string]string
 }
 
-func NewAccount() *Account {
-	b := &Account{
-		system: make(map[string]int),
+func NewSystem(userInfo map[string]string) *System {
+	s := &System{
+		info: userInfo,
 	}
-	return b
+	return s
 }
 
-func (a *Account) AddUser(userName string) {
-	a.Lock()
-	defer a.Unlock()
-	if a.isUserExist(userName) {
-		log.Printf("can't AddUser:user %v exist", userName)
-	}
-	a.system[userName] = 0
-}
-
-func (a *Account) isUserExist(userName string) bool {
-	_, isExist := a.system[userName]
+func (s *System) isUserExist(userName string) bool {
+	_, isExist := s.info[userName]
 	return isExist
 }
 
-func (a *Account) Query(userName string) {
-	a.RLock()
-	defer a.RUnlock()
-	if !a.isUserExist(userName) {
+func (s *System) Query(userName string) {
+	s.Lock()
+	defer s.Unlock()
+
+	if !s.isUserExist(userName) {
 		log.Printf("can't Save: user %v not exist", userName)
 		return
 	}
 
-	amount := a.system[userName]
-	log.Printf("Query success: user %v has %d", userName, amount)
+	info := s.info[userName]
+	log.Printf("Query success: user %v info: %v", userName, info)
 }
-
-func (a *Account) Save(userName string, saving int) {
-	a.RLock()
-	defer a.RUnlock()
-	if !a.isUserExist(userName) {
-		log.Printf("can't Save: user %v not exist", userName)
-		return
-	}
-
-	amount := a.system[userName]
-	amount += saving
-	log.Printf("Save success: user %v has %d", userName, amount)
-}
-
-func (a *Account) Out(userName string, saving int) {
-	a.RLock()
-	defer a.RUnlock()
-	if !a.isUserExist(userName) {
-		log.Printf("can't Out: user %v not exist", userName)
-		return
-	}
-
-	amount := a.system[userName]
-	if amount < 0 {
-		log.Printf("can't Out: user %v not exist", userName)
-		return
-	}
-	amount -= saving
-	log.Printf("Out success: user %v has %d", userName, amount)
-}
-
 ```
 
-首先，我们演示一下互斥锁：上锁后，会将其他线程阻塞。无论其他线程想做什么操作。
-我们模拟一个账号系统挂掉的场景。当系统“挂掉”时，我们启动互斥锁，在互斥锁解锁之前，其他线程对账号系统的访问都会阻塞，直至互斥锁解锁。
+我们将通过模拟一个信息系统挂掉的场景以演示互斥锁：上锁的线程，会将其他线程的执行阻塞，无论其他线程想做什么操作，直到该线程解锁。当系统“监控线程”发现系统“下线”时，会启动互斥锁，其他线程对信息系统的访问都会阻塞，直至互斥锁解锁。
 
 
 ```golang
 func SystemOffline() {
-	a := NewAccount()
-	a.AddUser("existOne")
-
-	go func(a *Account) {
-		a.Lock()
-		defer a.Unlock()
+	s := NewSystem(map[string]string{"user1":"info1"})
+	go func(s *System) {
+		s.Lock()
+		defer s.Unlock()
 		// systemOffline
 		log.Printf("system offline")
 		time.Sleep(5 * time.Second)
 
 		// systemOnline
 		log.Printf("system back online")
-	}(a)
 
+	}(s)
 	go func() {
 		time.Sleep(1 * time.Second)
-		a.Query("existOne")
+		s.Query("user1")
 	}()
 }
 
@@ -168,20 +126,178 @@ func main() {
 ```
 
 运行结果：
+
+```golang
+2019/04/28 23:10:40 system offline
+2019/04/28 23:10:45 system back online
+2019/04/28 23:10:45 Query success: user user1 info: info1
+```
+
+运行结果显示，只有在系统“监控线程”运行结束（故障结束）后，对信息系统的访问才会执行。
+
+
+```golang
+type FileSystem struct {
+	sync.RWMutex
+	info map[string]string
+}
+
+func NewFileSystem(initFiles map[string]string) *FileSystem {
+	f := &FileSystem{
+		info: initFiles,
+	}
+	return f
+}
+
+func (f *FileSystem) isFileExist(filePath string) bool {
+	_, isExist := f.info[filePath]
+	return isExist
+}
+
+func (f *FileSystem) ReadFile(filePath string, takeTime time.Duration) {
+	f.RLock()
+	defer f.RUnlock()
+
+	//模拟业务耗时
+	time.Sleep(takeTime)
+
+	if !f.isFileExist(filePath) {
+		log.Printf("can't Read: file %v not exist", filePath)
+		return
+	}
+
+	content := f.info[filePath]
+	log.Printf("Read success: file %v contents: %v", filePath, content)
+}
+
+func (f *FileSystem) WriteFile(filePath string, newContent string, takeTime time.Duration) {
+	f.Lock()
+	defer f.Unlock()
+
+	//模拟业务耗时
+	time.Sleep(takeTime)
+
+	if !f.isFileExist(filePath) {
+		log.Printf("can't Write: file %v not exist", filePath)
+		return
+	}
+
+	f.info[filePath] = newContent
+	log.Printf("Write success: file %v contents: %v", filePath, f.info[filePath])
+}
+
+```
+
+我们将通过两个线程模拟两个用户同时访问文件系统的场景演示读写互斥锁。当两个用户（线程）都是读操作时，这种行为可以并行执行。但当有一个用户（线程）是写操作时，写操作用户（线程）将阻塞其他用户（线程）的访问。
+
+```golang
+func ReadAtTheSameTime(){
+	fs := NewFileSystem(map[string]string{"file1":"file1 content"})
+	go func() {
+		fs.ReadFile("file1", 5 * time.Second)
+		log.Println("reader1 finished")
+	}()
+
+	go func() {
+		time.Sleep(time.Second)
+		fs.ReadFile("file1", 1 * time.Second)
+		log.Println("reader2 finished")
+	}()
+}
+
+func main() {
+	ReadAtTheSameTime()
+
+	time.Sleep(10 * time.Second)
+}
+
+```
+
+运行结果：
+
+```golang
+2019/04/29 00:21:58 Read success: file file1 contents: file1 content
+2019/04/29 00:21:58 reader2 finished
+2019/04/29 00:22:01 Read success: file file1 contents: file1 content
+2019/04/29 00:22:01 reader1 finished
+```
+
+运行结果显示，当两个线程都是读操作时，两个线程能并行运行。启动较晚但是结束较早的reader2能按时结束对file1的访问。
+
+```golang
+func ReadWhileWrite(){
+	fs := NewFileSystem(map[string]string{"file1":"file1 content"})
+	go func() {
+		fs.WriteFile("file1","new content" ,5 * time.Second)
+		log.Println("reader1 finished")
+	}()
+
+	go func() {
+		time.Sleep(time.Second)
+		fs.ReadFile("file1", 1 * time.Second)
+		log.Println("reader2 finished")
+	}()
+}
+
+
+func main() {
+	//ReadAtTheSameTime()
+	ReadWhileWrite()
+	time.Sleep(10 * time.Second)
+}
+```
+
+运行结果：
+
+```golang
+2019/04/29 00:34:07 Write success: file file1 contents: new content
+2019/04/29 00:34:07 reader1 finished
+2019/04/29 00:34:08 Read success: file file1 contents: new content
+2019/04/29 00:34:08 reader2 finished
+```
+
+运行结果显示，当两个线程中存在写操作时，两线程将无法并行运行，相反，而是分别独占文件系统。先启动的线程将先被完成。
+
+
+#### 2.1.2线程间通信与channel
+变量的线程安全问题，面对并解决的是多线程访问公共资源导致的竞争问题。这些公共资源变量对访问它的多个线程而言，往往是“全局可见”的，各线程都能访问到。但是各线程内的声明的变量，则对于其他线程而言不可见。因此，当线程间存在通信需求需要其他机制达成。
+
+当然，我们可以延续上一节的思路，开辟一块“共享内存”这样的公共资源的方式，实现线程间的数据交互。但是golang为我们提供了更好的方案。那便是channel。
+
+
+
+
+
+
+
+
+
+
+
+### 2.2线程间的协调问题
+
+
+
+
+
+
+
+### 2.3并发程度控制问题与线程池
+
+
+
+
+
+
+
+
+图片示例：
 ![Image text](https://github.com/sovietak47/go-doc/blob/master/%E5%A4%9A%E7%BA%BF%E7%A8%8B%20resource/Mutex.png)
 
 
 
   
 
-  
-线程内变量
-
-一般是在非主线程内声明的。该类变量最大的问题在于对其他线程而言不可见。这其实是好事，
-  
-  
-
-### 1.2
 
 
 ### 参考资料
