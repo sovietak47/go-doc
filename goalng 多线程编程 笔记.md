@@ -168,7 +168,7 @@ func main() {
 ```
 
 运行结果：
-![Image text](https://raw.githubusercontent.com/hongmaju/light7Local/master/img/productShow/20170518152848.png)
+![Image text](https://github.com/sovietak47/go-doc/blob/master/%E5%A4%9A%E7%BA%BF%E7%A8%8B%20resource/Mutex.png)
 
 
 
